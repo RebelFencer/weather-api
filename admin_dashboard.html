@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather API Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+    input, select, button {
+      padding: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    #result, #statusResult, #weatherResult, #upgradeResult, #resetResult, #adminPanel, #statsPanel, #registerResult {
+      background: #eef;
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 0.5rem;
+      text-align: left;
+    }
+    section {
+      margin-bottom: 2rem;
+    }
+    select.plan-select {
+      width: auto;
+    }
+    canvas {
+      max-width: 100%;
+      margin-top: 1rem;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>🌤️ Weather API Dashboard</h1>
+
+  <section>
+    <h2>Register</h2>
+    <form id="registerForm">
+      <label>Email:
+        <input type="email" name="email" required />
+      </label>
+      <label>Plan:
+        <select name="plan">
+          <option value="Free">Free</option>
+          <option value="Pro">Pro</option>
+        </select>
+      </label>
+      <button type="submit">Generate API Key</button>
+    </form>
+    <div id="registerResult"></div>
+  </section>
+
+  <section>
+    <h2>Admin Statistics</h2>
+    <div id="statsPanel">Loading stats...</div>
+    <canvas id="planChart"></canvas>
+  </section>
+
+  <section>
+    <h2>Admin Panel</h2>
+    <label>Filter by plan:
+      <select id="planFilter" onchange="loadUsers()">
+        <option value="">All</option>
+        <option value="Free">Free</option>
+        <option value="Pro">Pro</option>
+      </select>
+    </label>
+    <label>Search email:
+      <input type="text" id="searchEmail" oninput="loadUsers()" placeholder="Type email..." />
+    </label>
+    <label>Min requests today:
+      <input type="number" id="minRequests" oninput="loadUsers()" placeholder="0" />
+    </label>
+    <button onclick="loadUsers()">Reload Users</button>
+    <div id="adminPanel"></div>
+  </section>
+
+  <script>
+    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new URLSearchParams(new FormData(e.target));
+      const res = await fetch("http://127.0.0.1:8000/register", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        document.getElementById("registerResult").innerHTML = `<strong>API Key:</strong> ${data.api_key}`;
+        loadUsers();
+        loadStats();
+      } else {
+        document.getElementById("registerResult").innerText = data.detail || "Registration failed.";
+      }
+    });
+
+    let chartInstance = null;
+
+    async function loadStats() {
+      const res = await fetch("http://127.0.0.1:8000/admin/stats");
+      const stats = await res.json();
+      const html = `
+        <p>Total users: <strong>${stats.total}</strong></p>
+        <p>Free plan: <strong>${stats.free}</strong></p>
+        <p>Pro plan: <strong>${stats.pro}</strong></p>
+        <p>Average daily usage: <strong>${stats.avg_requests.toFixed(2)}</strong></p>
+      `;
+      document.getElementById("statsPanel").innerHTML = html;
+
+      const ctx = document.getElementById("planChart").getContext("2d");
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: ["Free", "Pro"],
+          datasets: [{
+            label: "Users by Plan",
+            data: [stats.free, stats.pro],
+            backgroundColor: ["#4caf50", "#2196f3"]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    async function updateUserPlan(email, newPlan) {
+      const formData = new URLSearchParams();
+      formData.append("email", email);
+      formData.append("new_plan", newPlan);
+      const res = await fetch("http://127.0.0.1:8000/admin/update-plan", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      alert(data.message || "Plan updated.");
+      loadUsers();
+      loadStats();
+    }
+
+    async function deleteUser(email) {
+      if (!confirm(`Are you sure you want to delete ${email}?`)) return;
+      const formData = new URLSearchParams();
+      formData.append("email", email);
+      const res = await fetch("http://127.0.0.1:8000/admin/delete-user", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      alert(data.message || "User deleted.");
+      loadUsers();
+      loadStats();
+    }
+
+    async function loadUsers() {
+      const filter = document.getElementById("planFilter").value;
+      const search = document.getElementById("searchEmail").value.toLowerCase();
+      const minRequests = parseInt(document.getElementById("minRequests").value) || 0;
+
+      const res = await fetch("http://127.0.0.1:8000/admin/users");
+      const users = await res.json();
+
+      let html = '<table><tr><th>Email</th><th>Plan</th><th>Requests Today</th><th>Key</th><th>Change Plan</th><th>Delete</th></tr>';
+      users
+        .filter(user => (!filter || user.plan === filter)
+                     && user.email.toLowerCase().includes(search)
+                     && user.requests_today >= minRequests)
+        .forEach(user => {
+          html += `<tr>
+            <td>${user.email}</td>
+            <td>${user.plan}</td>
+            <td>${user.requests_today}</td>
+            <td>${user.key}</td>
+            <td>
+              <select class="plan-select" onchange="updateUserPlan('${user.email}', this.value)">
+                <option value="Free" ${user.plan === 'Free' ? 'selected' : ''}>Free</option>
+                <option value="Pro" ${user.plan === 'Pro' ? 'selected' : ''}>Pro</option>
+              </select>
+            </td>
+            <td><button onclick="deleteUser('${user.email}')">Delete</button></td>
+          </tr>`;
+        });
+      html += '</table>';
+
+      document.getElementById("adminPanel").innerHTML = html;
+    }
+
+    loadStats();
+    loadUsers();
+  </script>
+</body>
+</html>

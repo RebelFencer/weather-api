@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather API - User Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    #registerResult, #statusResult, #weatherResult, #upgradeResult, #resetResult {
+      background: #eef;
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 5px;
+    }
+    section {
+      margin-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌤️ Weather API Dashboard</h1>
+
+  <section>
+    <h2>Register</h2>
+    <form id="registerForm">
+      <label>Email:
+        <input type="email" name="email" required />
+      </label>
+      <label>Plan:
+        <select name="plan">
+          <option value="Free">Free</option>
+          <option value="Pro">Pro</option>
+        </select>
+      </label>
+      <button type="submit">Generate API Key</button>
+    </form>
+    <div id="registerResult"></div>
+  </section>
+
+  <section>
+    <h2>Status</h2>
+    <form id="statusForm">
+      <label>API Key:
+        <input type="text" id="status_api_key" required />
+      </label>
+      <button type="submit">Check Status</button>
+    </form>
+    <div id="statusResult"></div>
+  </section>
+
+  <section>
+    <h2>Weather Forecast</h2>
+    <form id="weatherForm">
+      <label>Latitude:
+        <input type="number" step="any" name="lat" required />
+      </label>
+      <label>Longitude:
+        <input type="number" step="any" name="lon" required />
+      </label>
+      <button type="submit">Get Weather</button>
+    </form>
+    <div id="weatherResult"></div>
+  </section>
+
+  <section>
+    <h2>Upgrade Plan</h2>
+    <form id="upgradeForm">
+      <button type="submit">Upgrade to Pro (via Stripe)</button>
+    </form>
+    <div id="upgradeResult"></div>
+  </section>
+
+  <section>
+    <h2>Reset API Key</h2>
+    <form id="resetForm">
+      <label>Email:
+        <input type="email" name="email" required />
+      </label>
+      <button type="submit">Reset API Key</button>
+    </form>
+    <div id="resetResult"></div>
+  </section>
+
+  <script>
+    function updateStatusApiKeyField(newKey = null) {
+      const key = newKey || localStorage.getItem("api_key");
+      const input = document.getElementById("status_api_key");
+      if (key && input) {
+        input.value = key;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      updateStatusApiKeyField();
+    });
+
+    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new URLSearchParams(new FormData(form));
+      const res = await fetch("http://127.0.0.1:8000/register", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem("api_key", data.api_key);
+        document.getElementById("registerResult").innerText = `✅ API Key: ${data.api_key}`;
+        updateStatusApiKeyField(data.api_key);
+        form.reset();
+      } else {
+        document.getElementById("registerResult").innerText = data.detail || "Registration failed.";
+      }
+    });
+
+    document.getElementById("statusForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const key = document.getElementById("status_api_key").value;
+      localStorage.setItem("api_key", key);
+      const res = await fetch(`http://127.0.0.1:8000/status?api_key=${key}`);
+      const data = await res.json();
+      document.getElementById("statusResult").innerText = JSON.stringify(data, null, 2);
+    });
+
+    document.getElementById("weatherForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const lat = form.lat.value;
+      const lon = form.lon.value;
+      const key = localStorage.getItem("api_key");
+      const res = await fetch(`http://127.0.0.1:8000/weather?lat=${lat}&lon=${lon}&api_key=${key}`);
+      const data = await res.json();
+      document.getElementById("weatherResult").innerText = JSON.stringify(data, null, 2);
+    });
+
+    document.getElementById("upgradeForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const key = localStorage.getItem("api_key");
+      const res = await fetch("http://127.0.0.1:8000/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: key }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        document.getElementById("upgradeResult").innerText = JSON.stringify(data, null, 2);
+      }
+    });
+
+    document.getElementById("resetForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new URLSearchParams(new FormData(e.target));
+      const res = await fetch("http://127.0.0.1:8000/reset-api-key", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem("api_key", data.new_api_key);
+        document.getElementById("resetResult").innerText = `🔁 New API Key: ${data.new_api_key}`;
+        updateStatusApiKeyField(data.new_api_key);
+      } else {
+        document.getElementById("resetResult").innerText = data.detail || "Reset failed.";
+      }
+    });
+  </script>
+</body>
+</html>
