@@ -1,3 +1,4 @@
+pyOpenSSL
 fastapi
 httpx
 uvicorn
