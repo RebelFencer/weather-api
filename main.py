@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from fastapi.staticfiles import StaticFiles
 import os
+import uvicorn
 
 app = FastAPI()
 
@@ -37,7 +38,12 @@ endpoint_secret = os.getenv("STRIPE_ENDPOINT_SECRET")
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+@app.get("/")
+def root():
+    return {"message": "Hello from Weather API!"}
 
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def serve_dashboard():
