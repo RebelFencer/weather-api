@@ -31,7 +31,7 @@ DB = "weather_api.db"
 
 # Stripe setup
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-endpoint_secret = "whsec_be0705e9945e807423b62f09853ffff9545b3d2208cdfc77d85d6f946e6d62e2"
+endpoint_secret = os.getenv("STRIPE_ENDPOINT_SECRET")
 
 # Email sender
 EMAIL_USER = os.getenv("EMAIL_USER")
